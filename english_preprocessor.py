@@ -33,7 +33,7 @@ ABBREVIATIONS = {
 
 
 
-# ── Normalization ──────────────────────────────────────────────────
+#Normalization function
  
 def normalize(text: str) -> str:
     text = re.sub(r'<[^>]+>', ' ', text)              # remove HTML
@@ -46,23 +46,23 @@ def normalize(text: str) -> str:
     for pattern, replacement in ABBREVIATIONS.items():
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
  
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r'\s+', ' ', text).strip() #removing spaces
     return text
  
-# ── Tokenization ───────────────────────────────────────────────────
+#Tokenization function
  
 def tokenize(text: str) -> list:
     return sent_tokenize(text, language='english')
  
  
-# ── Full pipeline ──────────────────────────────────────────────────
+# preprocessing
  
 def preprocess_english(text: str) -> list:
     text = normalize(text)
     return tokenize(text)
  
  
-# ── Language detection ─────────────────────────────────────────────
+#Language detection
  
 def detect_english(text: str) -> bool:
     arabic_chars = len(re.findall(r'[\u0600-\u06FF]', text))

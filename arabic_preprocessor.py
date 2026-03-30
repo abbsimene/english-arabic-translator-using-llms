@@ -6,7 +6,7 @@ nltk.download('punkt',     quiet=True)
 nltk.download('punkt_tab', quiet=True)
 
 
-# ── Normalization ──────────────────────────────────────────────────
+# Normalization function
 
 def normalize(text: str) -> str:
     text = re.sub(r'<[^>]+>', ' ', text)                      # remove HTML
@@ -16,24 +16,24 @@ def normalize(text: str) -> str:
     text = re.sub(r'[\u064B-\u065F\u0617-\u061A]', '', text)  # remove tashkeel
     text = re.sub(r'\u0640', '', text)                         # remove tatweel
     text = re.sub(r'[^\u0600-\u06FF\s\.\،\؟\!]', '', text)   # keep Arabic + punctuation
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r'\s+', ' ', text).strip()  #removing spaces
     return text
 
 
-# ── Tokenization ───────────────────────────────────────────────────
+# Tokenization function
 
 def tokenize(text: str) -> list:
     return sent_tokenize(text, language='arabic')
 
 
-# ── Full pipeline ──────────────────────────────────────────────────
+# Full preprocessing 
 
 def preprocess_arabic(text: str) -> list:
     text = normalize(text)
     return tokenize(text)
 
 
-# ── Language detection ─────────────────────────────────────────────
+# Language detection
 
 def detect_arabic(text: str) -> bool:
     arabic_chars = len(re.findall(r'[\u0600-\u06FF]', text))
