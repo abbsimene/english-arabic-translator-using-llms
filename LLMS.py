@@ -1,24 +1,6 @@
-"""
-translator.py
--------------
-Sends preprocessed sentences to Ollama (aya model)
-and returns the translated text.
-
-Uses prompt engineering to:
-  - Specify the model's role as a professional translator
-  - Handle scientific / AI-related vocabulary correctly
-  - Ensure clean output (translation only, no explanations)
-"""
-
 import requests
-
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL      = "aya"
-
-# ── Prompts ────────────────────────────────────────────────────────
-# Prompt engineering: we give the model a clear role and strict
-# instructions so it produces reliable, contextual translations
-# especially for scientific and AI-related content.
+MODEL = "aya"
 
 PROMPTS = {
     "ar_to_en": (
@@ -42,7 +24,7 @@ PROMPTS = {
 }
 
 
-# ── Core translation function ──────────────────────────────────────
+# Core translation function 
 
 def translate_sentence(sentence: str, direction: str) -> str | None:
     """
@@ -109,4 +91,4 @@ def translate(sentences: list, direction: str) -> str | None:
     if not results:
         return None
 
-    return " ".join(results)
+    return " ".join(results) 
