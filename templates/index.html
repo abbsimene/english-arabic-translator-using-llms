@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Translator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #fff; color: #000; font-family: monospace; font-size: 14px; height: 100vh; display: flex; flex-direction: column; }
+
+    .bar { border-bottom: 1px solid #000; padding: 0.6rem 1.5rem; display: flex; gap: 0.5rem; align-items: center; }
+    .dir-btn { border: 1px solid #000; background: #fff; padding: 0.25rem 0.7rem; font-family: monospace; font-size: 0.75rem; cursor: pointer; }
+    .dir-btn.active { background: #000; color: #fff; }
+    .dir-btn:hover:not(.active) { background: #f0f0f0; }
+    .spacer { flex: 1; }
+    .status { font-size: 0.75rem; color: #888; }
+    .status.ok  { color: #090; }
+    .status.err { color: #c00; }
+    .btn { border: 1px solid #000; background: #000; color: #fff; padding: 0.25rem 1rem; font-family: monospace; font-size: 0.75rem; cursor: pointer; }
+    .btn:hover { background: #333; }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .panels { flex: 1; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+    .panel { display: flex; flex-direction: column; }
+    .panel:first-child { border-right: 1px solid #000; }
+
+    textarea { flex: 1; border: none; outline: none; padding: 1.5rem; font-family: monospace; font-size: 1rem; resize: none; background: #fff; color: #000; line-height: 1.7; }
+
+    .output-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .output { flex: 1; padding: 1.5rem; font-size: 1rem; line-height: 1.7; white-space: pre-wrap; overflow-y: auto; }
+    .output.arabic { direction: rtl; text-align: right; }
+    .output.empty  { color: #ccc; }
+
+    /* auto score bar — shows right under the translation */
+    .score-bar {
+      border-top: 1px solid #ddd;
+      padding: 0.4rem 1.5rem;
+      display: none;
+      align-items: center;
+      gap: 1rem;
+      font-size: 0.75rem;
+    }
+    .score-bar.visible { display: flex; }
+
+    .score-track {
+      flex: 1;
+      height: 4px;
+      background: #eee;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .score-fill {
+      height: 100%;
+      background: #000;
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+    .score-text { white-space: nowrap; }
+
+    /* bleu row at bottom */
+    .eval-bar { border-top: 1px solid #000; padding: 0.6rem 1.5rem; display: flex; gap: 1rem; align-items: center; }
+    .eval-bar input { flex: 1; border: 1px solid #000; padding: 0.25rem 0.6rem; font-family: monospace; font-size: 0.75rem; outline: none; }
+    .eval-bar input::placeholder { color: #aaa; }
+    .bleu-badge { font-size: 0.75rem; white-space: nowrap; display: none; }
+    .bleu-num { font-weight: bold; font-size: 1rem; }
+  </style>
+</head>
+<body>
+
+<div class="bar">
+  <button class="dir-btn active" id="btn-auto"  onclick="setDir('auto')">AUTO</button>
+  <button class="dir-btn"        id="btn-ar-en" onclick="setDir('ar_to_en')">AR → EN</button>
+  <button class="dir-btn"        id="btn-en-ar" onclick="setDir('en_to_ar')">EN → AR</button>
+  <div class="spacer"></div>
+  <span class="status" id="status"></span>
+  <button class="btn" id="translate-btn" onclick="doTranslate()">TRANSLATE</button>
+</div>
+
+<div class="panels">
+  <div class="panel">
+    <textarea id="source" placeholder="Type or paste text here..."></textarea>
+  </div>
+  <div class="panel">
+    <div class="output-wrap">
+      <div class="output empty" id="output">Translation will appear here...</div>
+      <!-- auto quality score — no reference needed -->
+      <div class="score-bar" id="score-bar">
+        <span class="score-text" id="score-text">Quality: —</span>
+        <div class="score-track">
+          <div class="score-fill" id="score-fill" style="width:0%"></div>
+        </div>
+        <span id="score-pct">0%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BLEU with reference -->
+<div class="eval-bar">
+  <input type="text" id="reference" placeholder="Paste reference translation for BLEU score..."/>
+  <span class="bleu-badge" id="bleu-badge">
+    BLEU <span class="bleu-num" id="bleu-num">0</span>% — <span id="bleu-label"></span>
+  </span>
+</div>
+
+<script>
+  let direction  = 'auto';
+  let lastResult = '';
+
+  function setDir(d) {
+    direction = d;
+    document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+    const id = d === 'auto' ? 'btn-auto' : d === 'ar_to_en' ? 'btn-ar-en' : 'btn-en-ar';
+    document.getElementById(id).classList.add('active');
+  }
+
+  async function doTranslate() {
+    const text = document.getElementById('source').value.trim();
+    if (!text) return;
+
+    const btn    = document.getElementById('translate-btn');
+    const status = document.getElementById('status');
+    const output = document.getElementById('output');
+
+    btn.disabled       = true;
+    status.className   = 'status';
+    status.textContent = 'translating...';
+    output.className   = 'output empty';
+    output.textContent = 'Translating...';
+    document.getElementById('score-bar').classList.remove('visible');
+
+    try {
+      const res  = await fetch('/translate', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({ text, direction }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      lastResult         = data.translation;
+      output.className   = 'output' + (data.direction === 'en_to_ar' ? ' arabic' : '');
+      output.textContent = data.translation;
+      status.className   = 'status ok';
+      status.textContent = 'done';
+
+      // show auto score immediately
+      const q = data.auto_score;
+      document.getElementById('score-bar').classList.add('visible');
+      document.getElementById('score-text').textContent = 'Quality: ' + q.label;
+      document.getElementById('score-fill').style.width = q.score + '%';
+      document.getElementById('score-pct').textContent  = q.score + '%';
+
+      // also run BLEU if reference already filled
+      const ref = document.getElementById('reference').value.trim();
+      if (ref) doEvaluate();
+
+    } catch (e) {
+      output.textContent = '';
+      status.className   = 'status err';
+      status.textContent = 'error: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function doEvaluate() {
+    const reference = document.getElementById('reference').value.trim();
+    if (!reference || !lastResult) return;
+
+    const res  = await fetch('/evaluate', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ reference, hypothesis: lastResult }),
+    });
+    const data = await res.json();
+    document.getElementById('bleu-badge').style.display = 'inline';
+    document.getElementById('bleu-num').textContent     = data.bleu;
+    document.getElementById('bleu-label').textContent   = data.label;
+  }
+
+  document.getElementById('reference').addEventListener('input', () => {
+    if (lastResult) doEvaluate();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') doTranslate();
+  });
+</script>
+</body>
+</html>

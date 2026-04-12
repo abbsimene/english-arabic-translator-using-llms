@@ -67,4 +67,3 @@ def preprocess_english(text: str) -> list:
 def detect_english(text: str) -> bool:
     arabic_chars = len(re.findall(r'[\u0600-\u06FF]', text))
     return arabic_chars <= len(text) * 0.2
- 

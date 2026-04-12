@@ -1,6 +1,11 @@
-import requests
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "aya"
+import os
+from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
+
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+MODEL  = "llama-3.3-70b-versatile"
 
 PROMPTS = {
     "ar_to_en": (
@@ -24,71 +29,23 @@ PROMPTS = {
 }
 
 
-# Core translation function 
-
 def translate_sentence(sentence: str, direction: str) -> str | None:
-    """
-    Send a single sentence to the Ollama API and return the translation.
-
-    Args:
-        sentence  : one clean sentence to translate
-        direction : "ar_to_en" or "en_to_ar"
-
-    Returns:
-        translated string, or None if the request failed
-    """
-    prompt  = PROMPTS[direction].format(text=sentence)
-    payload = {
-        "model":  MODEL,
-        "prompt": prompt,
-        "stream": False,
-    }
+    prompt = PROMPTS[direction].format(text=sentence)
     try:
-        response = requests.post(OLLAMA_URL, json=payload, timeout=120)
-        response.raise_for_status()
-        return response.json().get("response", "").strip()
-
-    except requests.exceptions.ConnectionError:
-        print("\n  [ERROR] Cannot reach Ollama.")
-        print("  Make sure Ollama is running: ollama serve")
-        return None
-
-    except requests.exceptions.Timeout:
-        print("\n  [ERROR] Ollama request timed out.")
-        return None
-
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"\n  [ERROR] Unexpected error: {e}")
+        print(f"\n  [ERROR] Groq API error: {e}")
         return None
 
-
-# ── Translate a list of sentences ──────────────────────────────────
 
 def translate(sentences: list, direction: str) -> str | None:
-    """
-    Translate a list of sentences one by one and join the results.
-
-    Args:
-        sentences : list of preprocessed sentences
-        direction : "ar_to_en" or "en_to_ar"
-
-    Returns:
-        full translated text as a single string
-    """
     results = []
-    total   = len(sentences)
-
-    for i, sentence in enumerate(sentences, 1):
-        print(f"  Translating sentence {i}/{total}...", end="\r")
+    for sentence in sentences:
         result = translate_sentence(sentence, direction)
         if result:
             results.append(result)
-        else:
-            print(f"\n  [WARNING] Sentence {i} failed, skipping.")
-
-    print(" " * 45, end="\r")  # clear progress line
-
-    if not results:
-        return None
-
-    return " ".join(results) 
+    return " ".join(results) if results else None
